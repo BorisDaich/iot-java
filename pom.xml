@@ -4,12 +4,12 @@
 	<groupId>com.ibm.iotf.client</groupId>
 	<artifactId>iotf-java</artifactId>
 	<version>0.0.2-SNAPSHOT</version>
-	<name>com.ibm.iotf.client iot-java</name>
+	<name>${project.groupId}:${project.artifactId}</name>
 	<description>IBM IoT Foundation client Library with samples from github https://github.com/ibm-messaging/iot-java</description>
 	<url>https://github.com/ibm-messaging/iot-java</url>
 	<scm>
-		<url>https://github.com/ibm-messaging/iot-java</url>
-		<connection>scm:git:git://github.com/ibm-messaging/iot-java.git</connection>
+		<url>git@github.com:ibm-messaging/iot-java.git</url>
+		<connection>scm:git:git@github.com:ibm-messaging/iot-java.git</connection>
 		<developerConnection>scm:git:git@github.com:ibm-messaging/iot-java.git</developerConnection>
 	</scm>
 	<issueManagement>
@@ -26,6 +26,14 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
+	<developers>
+		<developer>
+			<name>Amit M Mangalvedkar</name>
+			<email>amitmangalvedkar@gmail.com</email>
+			<organization>IBM</organization>
+			<organizationUrl>http://www.ibm.com</organizationUrl>
+		</developer>
+	</developers>
 	<build>
 		<sourceDirectory>src</sourceDirectory>
 		<testSourceDirectory>test</testSourceDirectory>
@@ -74,6 +82,7 @@
 				<version>2.10.3</version>
 				<executions>
 					<execution>
+						<id>attach-javadocs</id>
 						<goals>
 							<goal>jar</goal>
 						</goals>
@@ -86,12 +95,13 @@
 				<version>2.4</version>
 				<executions>
 					<execution>
+						<id>attach-sources</id>
 						<goals>
-							<goal>jar</goal>
+							<goal>jar-no-fork</goal>
 						</goals>
 					</execution>
 				</executions>
-			</plugin>
+			</plugin>			
 		</plugins>
 	</build>
 
@@ -103,7 +113,14 @@
 		</repository>
 		<repository>
 			<id>local-project-repo</id>
+			<name>local project repository</name>
 			<url>file://${basedir}/project-repo</url>
+			<releases>
+				<enabled>true</enabled>				
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
 		</repository>
 	</repositories>
 
@@ -112,25 +129,25 @@
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-			<version>4.12</version>
+			<version>RELEASE</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>javax.servlet-api</artifactId>
-			<version>3.1.0</version>
+			<version>RELEASE</version>
 		</dependency>
 
 
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
 			<artifactId>gson</artifactId>
-			<version>2.3.1</version>
+			<version>RELEASE</version>
 		</dependency>
 		<dependency>
 			<groupId>args4j</groupId>
 			<artifactId>args4j</artifactId>
-			<version>2.32</version>
+			<version>RELEASE</version>
 		</dependency>
 		<dependency>
 			<groupId>commons-net</groupId>
@@ -140,12 +157,12 @@
 		<dependency>
 			<groupId>org.apache.httpcomponents</groupId>
 			<artifactId>fluent-hc</artifactId>
-			<version>4.5</version>
+			<version>RELEASE</version>
 		</dependency>
 		<dependency>
 			<groupId>joda-time</groupId>
 			<artifactId>joda-time</artifactId>
-			<version>2.8.2</version>
+			<version>RELEASE</version>
 		</dependency>
 		<dependency>
 			<groupId>log4j</groupId>
@@ -155,17 +172,17 @@
 		<dependency>
 			<groupId>com.ibm.json</groupId>
 			<artifactId>json4j</artifactId>
-			<version>2.3</version>
+			<version>LATEST</version>
 		</dependency>
 		<dependency>
 			<groupId>org.fusesource</groupId>
 			<artifactId>sigar</artifactId>
-			<version>1.6.4</version>
+			<version>RELEASE</version>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.paho</groupId>
 			<artifactId>org.eclipse.paho.client.mqttv3</artifactId>
-			<version>1.0.1</version>
+			<version>RELEASE</version>
 		</dependency>
 	</dependencies>
 </project>
