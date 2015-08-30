@@ -17,7 +17,8 @@ public class ApplicationStatus extends Status{
 	 * 					An object of the class String which denotes the appId
 	 * @param msg
 	 * 					An object of the class MqttMessage
-	 * @see <a href="Paho Client Library">http://www.eclipse.org/paho/files/javadoc/index.html</a> 
+	 * 
+	 * 	 * @see <a href="http://www.eclipse.org/paho/files/javadoc/index.html">Paho Client Library</a> 
 	 * @throws UnsupportedEncodingException 
 	 */	
 	public ApplicationStatus(String id, MqttMessage msg) throws UnsupportedEncodingException {

@@ -2,3 +2,5 @@
 *.cfg
 /tmp
 /output
+/bin/
+/target/

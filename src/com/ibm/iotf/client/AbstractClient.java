@@ -87,7 +87,7 @@ public abstract class AbstractClient {
 	 * Create the Paho MQTT Client that will underpin the Device client.
 	 * @param callback
 	 * 			MqttCallback 
-	 * @see <a href="Paho Client Library">http://www.eclipse.org/paho/files/javadoc/index.html</a> 
+	 * @see <a href="http://www.eclipse.org/paho/files/javadoc/index.html">Paho Client Library</a> 
 	 * 
 	 */	
 
