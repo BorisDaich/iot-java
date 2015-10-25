@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -14,6 +16,8 @@ import java.util.logging.Logger;
 
 import javax.net.ssl.SSLContext;
 
+import org.apache.http.client.config.AuthSchemes;
+import org.apache.http.client.config.RequestConfig;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -27,69 +31,78 @@ import com.google.gson.Gson;
  * This is an abstract class which has to be extended
  */
 public abstract class AbstractClient {
-	
+
 	private static final String CLASS_NAME = AbstractClient.class.getName();
 	private static final Logger LOG = Logger.getLogger(CLASS_NAME);
-	
+
 	protected static final String CLIENT_ID_DELIMITER = ":";
-	
-	protected static final String DOMAIN = "messaging.internetofthings.ibmcloud.com";
+
+    protected static final List<String>  baseIoTFAuthPrefs     = Arrays.asList(AuthSchemes.BASIC);
+    protected static final String        baseIoTFHost          = "internetofthings.ibmcloud.com";
+
+    protected static final String        baseIoTFPath          = "/api/v0001/organizations/";
+    protected static final String        baseIoTFHttpScheme    = "https";
+    protected static final int           baseIoTFPort          = 443;
+    protected static final RequestConfig baseIoTFRequestConfig = RequestConfig.custom().setAuthenticationEnabled(true).setTargetPreferredAuthSchemes(baseIoTFAuthPrefs).build();
+
+
+	protected static final String DOMAIN =  "messaging" + baseIoTFHost;
 	protected static final int MQTT_PORT = 1883;
 	protected static final int MQTTS_PORT = 8883;
-	
+
 	/* Wait for 1 second after each attempt for the first 10 attempts*/
 	private static final long RATE_0 = TimeUnit.SECONDS.toMillis(1);
-	
+
 	/* After 5 attempts throttle the rate of connection attempts to 1 per 10 second */
 	private static final int THROTTLE_1 = 5;
 	private static final long RATE_1 = TimeUnit.SECONDS.toMillis(10);
-	
+
 	/* After 10 attempts throttle the rate of connection attempts to 1 per minute */
 	private static final int THROTTLE_2 = 10;
 	private static final long RATE_2 = TimeUnit.MINUTES.toMillis(1);
-	
+
 	/* After 20 attempts throttle the rate of connection attempts to 1 per 5 minutes */
 	private static final int THROTTLE_3 = 20;
 	private static final long RATE_3 = TimeUnit.MINUTES.toMillis(5);
-	
+
 	protected final Gson gson = new Gson();
-	
+
 	/**
 	 * A formatter for ISO 8601 compliant timestamps.
 	 */
 	protected final DateFormat ISO8601_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
-	
+
 	protected Properties options;
 	protected String clientId;
 	protected String clientUsername;
 	protected String clientPassword;
-	
+
 	protected int messageCount = 0;
-	
+
 	protected MqttClient mqttClient;
 	protected MqttConnectOptions mqttClientOptions;
 	protected MqttCallback mqttCallback;
-	
+
 
 	/**
 	 * Note that this class does not have a default constructor <br>
 	 * @param options
 	 * 			Properties object which contains different artifacts such as auth-key
-	 * 
-	 */		
-	
+	 *
+	 */
+
 	public AbstractClient(Properties options) {
 		this.options = options;
 		LOG.fine(options.toString());
 	}
-	
+
 	/**
 	 * Create the Paho MQTT Client that will underpin the Device client.
 	 * @param callback
-	 * 			MqttCallback 
-	 * @see <a href="http://www.eclipse.org/paho/files/javadoc/index.html">Paho Client Library</a> 
-	 * 
-	 */	
+	 * 			MqttCallback
+	 * @see <a href="http://www.eclipse.org/paho/files/javadoc/index.html">Paho Client Library</a>
+	 *
+	 */
 
 	protected void createClient(MqttCallback callback) {
 		System.out.println("Org ID          = " + getOrgId());
@@ -100,7 +113,7 @@ public abstract class AbstractClient {
 		this.mqttClientOptions = new MqttConnectOptions();
 		this.mqttCallback = callback;
 	}
-	
+
 	/**
 	 * Connect to the IBM Internet of Things Foundation
 	 */
@@ -116,7 +129,7 @@ public abstract class AbstractClient {
 		}
 		while (tryAgain) {
 			connectAttempts++;
-			
+
 			LOG.fine("Connecting to " + mqttClient.getServerURI() + " (attempt #" + connectAttempts + ")...");
 			if (clientUsername != null) {
 				LOG.fine(" * Username: " + mqttClientOptions.getUserName());
@@ -131,7 +144,7 @@ public abstract class AbstractClient {
 			} catch (MqttException e) {
 				e.printStackTrace();
 			}
-			
+
 			if (mqttClient.isConnected()) {
 				LOG.info("Successfully connected to the IBM Internet of Things Foundation");
 				if (LOG.isLoggable(Level.FINEST)) {
@@ -143,7 +156,7 @@ public abstract class AbstractClient {
 			}
 		}
 	}
-	
+
 	private void configureMqtt() {
 		String serverURI = "tcp://" + getOrgId() + "." + DOMAIN + ":" + MQTT_PORT;
 		try {
@@ -154,26 +167,26 @@ public abstract class AbstractClient {
 			e.printStackTrace();
 		}
 	}
-	
+
 	private void configureMqtts() {
 		String serverURI = "ssl://" + getOrgId() + "." + DOMAIN + ":" + MQTTS_PORT;
 		try {
 			mqttClient = new MqttClient(serverURI, clientId, null);
 			mqttClient.setCallback(mqttCallback);
-			
+
 			mqttClientOptions = new MqttConnectOptions();
 			mqttClientOptions.setUserName(clientUsername);
 			mqttClientOptions.setPassword(clientPassword.toCharArray());
-			
-			/* This isn't needed as the production messaging.internetofthings.ibmcloud.com 
+
+			/* This isn't needed as the production messaging.internetofthings.ibmcloud.com
 			 * certificate should already be in trust chain.
-			 * 
-			 * See: 
+			 *
+			 * See:
 			 *   http://stackoverflow.com/questions/859111/how-do-i-accept-a-self-signed-certificate-with-a-java-httpsurlconnection
 			 *   https://gerrydevstory.com/2014/05/01/trusting-x509-base64-pem-ssl-certificate-in-java/
 			 *   http://stackoverflow.com/questions/12501117/programmatically-obtain-keystore-from-pem
 			 *   https://gist.github.com/sharonbn/4104301
-			 * 
+			 *
 			 * CertificateFactory cf = CertificateFactory.getInstance("X.509");
 			 * InputStream certFile = AbstractClient.class.getResourceAsStream("messaging.pem");
 			 * Certificate ca = cf.generateCertificate(certFile);
@@ -183,9 +196,9 @@ public abstract class AbstractClient {
 			 * keyStore.setCertificateEntry("ca", ca);
 			 * TrustManager trustManager = TrustManagerUtils.getDefaultTrustManager(keyStore);
 			 * SSLContext sslContext = SSLContextUtils.createSSLContext("TLSv1.2", null, trustManager);
-			 * 
+			 *
 			 */
-			 
+
 			SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
 			sslContext.init(null, null, null);
 			mqttClientOptions.setSocketFactory(sslContext.getSocketFactory());
@@ -194,10 +207,10 @@ public abstract class AbstractClient {
 			e.printStackTrace();
 		}
 	}
-	
+
 	/**
 	 * Sleep for a variable period of time between connect attempts.
-	 * 
+	 *
 	 * @param attempts
 	 *               How many times have we tried (and failed) to connect
 	 */
@@ -227,7 +240,7 @@ public abstract class AbstractClient {
 			e.printStackTrace();
 		}
 	}
-	
+
 	/**
 	 * Disconnect the device from the IBM Internet of Things Foundation
 	 */
@@ -240,22 +253,22 @@ public abstract class AbstractClient {
 			e.printStackTrace();
 		}
 	}
-	
-	
+
+
 	/**
 	 * Determine whether this device is currently connected to the IBM Internet
 	 * of Things Foundation.
-	 * 
+	 *
 	 * @return Whether the device is connected to the IBM Internet of Things Foundation
 	 */
 	public boolean isConnected() {
 		return mqttClient.isConnected();
 	}
-	
+
 	/**
 	 * Provides a human readable String representation of this Device, including the number
 	 * of messages sent and the current connect status.
-	 * 
+	 *
 	 * @return String representation of the Device.
 	 */
 	public String toString() {
@@ -264,12 +277,12 @@ public abstract class AbstractClient {
 
 	/**
 	 * Parses properties file and returns back an object of Properties class
-	 * 
+	 *
 	 * @param propertiesFile
 	 * 						File object
 	 * @return properties
 	 * 						Properties object
-	 */	
+	 */
 	public static Properties parsePropertiesFile(File propertiesFile) {
 		Properties clientProperties = new Properties();
 		FileInputStream in;
@@ -286,10 +299,10 @@ public abstract class AbstractClient {
 		}
 		return clientProperties;
 	}
-	
+
 	/**
 	 * Returns the orgid for this client
-	 * 
+	 *
 	 * @return orgid
 	 * 						String orgid
 	 */
