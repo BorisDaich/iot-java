@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.Properties;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,6 +18,7 @@ import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.ibm.iotf.client.AbstractClient;
+import com.ibm.iotf.util.LoggerUtility;
 
 /**
  * A client, used by application, that handles connections with the IBM Internet of Things Foundation. <br>
@@ -28,7 +28,6 @@ import com.ibm.iotf.client.AbstractClient;
 public class ApplicationClient extends AbstractClient implements MqttCallback{
 	
 	private static final String CLASS_NAME = ApplicationClient.class.getName();
-	private static final Logger LOG = Logger.getLogger(CLASS_NAME);
 	
 	private static final Pattern DEVICE_EVENT_PATTERN = Pattern.compile("iot-2/type/(.+)/id/(.+)/evt/(.+)/fmt/(.+)");
 	private static final Pattern DEVICE_STATUS_PATTERN = Pattern.compile("iot-2/type/(.+)/id/(.+)/mon");
@@ -72,41 +71,52 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 	}
 	
 	/**
+	 * Returns the orgid for this client
+	 * 
+	 * @return orgid
+	 * 						String orgid
+	 */
+	public String getOrgId() {
+		// Check if org id is provided by the user
+		String orgid = super.getOrgId();
+		if(orgid == null || orgid.equals("")) {
+			String authKeyPassed = getAuthKey();
+			if(authKeyPassed != null && ! authKeyPassed.trim().equals("") && ! authKeyPassed.equals("quickstart")) {
+				if(authKeyPassed.length() >=8){
+					return authKeyPassed.substring(2, 8);}
+				else {
+					return null;
+				}
+			} else {
+				return "quickstart";
+			}
+		}
+		return orgid;
+
+	}
+	
+	/**
 	 * Accessor method to retrieve app id
 	 * @return appId
 	 * 					String appId
 	 */
 	public String getAppId() {
-		return options.getProperty("id");
+		return trimedValue(options.getProperty("id"));
 	}
 
-	/**
-	 * Accessor method to retrieve auth method
-	 * @return authMethod
-	 * 					String authMethod
-	 */
-	public String getAuthMethod() {
-		return options.getProperty("auth-method");
-	}
-	
 	/**
 	 * Accessor method to retrieve auth key
 	 * @return authKey
 	 * 					String authKey
 	 */
 	public String getAuthKey() {
-		return options.getProperty("auth-key");
+		String authKeyPassed = options.getProperty("auth-key");
+		if(authKeyPassed == null) {
+			authKeyPassed = options.getProperty("API-Key");
+		}
+		return trimedValue(authKeyPassed);
 	}
-
-	/**
-	 * Accessor method to retrieve auth token
-	 * @return authToken
-	 * 					String authToken
-	 */
-	public String getAuthToken() {
-		return options.getProperty("auth-token");
-	}
-
+	
 	
 	@Override
 	public void connect() {
@@ -153,6 +163,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		if (!isConnected()) {
 			return false;
 		}
+		final String METHOD = "publishEvent(5)";
 		JsonObject payload = new JsonObject();
 		
 		String timestamp = ISO8601_DATE_FORMAT.format(new Date());
@@ -163,15 +174,15 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		
 		String topic = "iot-2/type/" + deviceType + "/id/" + deviceId + "/evt/" + event + "/fmt/json";
 		
-		LOG.fine("Topic   = " + topic);
-		LOG.fine("Payload = " + payload.toString());
+		LoggerUtility.fine(CLASS_NAME, METHOD, "Topic   = " + topic);
+		LoggerUtility.fine(CLASS_NAME, METHOD, "Payload = " + payload.toString());
 		
 		MqttMessage msg = new MqttMessage(payload.toString().getBytes(Charset.forName("UTF-8")));
 		msg.setQos(0);
 		msg.setRetained(false);
 		
 		try {
-			mqttClient.publish(topic, msg);
+			mqttAsyncClient.publish(topic, msg).waitForCompletion();
 		} catch (MqttPersistenceException e) {
 			e.printStackTrace();
 			return false;
@@ -222,6 +233,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		if (!isConnected()) {
 			return false;
 		}
+		final String METHOD = "publishCommand(5)";
 		JsonObject payload = new JsonObject();
 		
 		String timestamp = ISO8601_DATE_FORMAT.format(new Date());
@@ -232,15 +244,15 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		
 		String topic = "iot-2/type/" + deviceType + "/id/" + deviceId + "/cmd/" + command + "/fmt/json";
 		
-		LOG.fine("Topic   = " + topic);
-		LOG.fine("Payload = " + payload.toString());
+		LoggerUtility.fine(CLASS_NAME, METHOD, "Topic   = " + topic);
+		LoggerUtility.fine(CLASS_NAME, METHOD, "Payload = " + payload.toString());
 		
 		MqttMessage msg = new MqttMessage(payload.toString().getBytes(Charset.forName("UTF-8")));
 		msg.setQos(0);
 		msg.setRetained(false);
 		
 		try {
-			mqttClient.publish(topic, msg);
+			mqttAsyncClient.publish(topic, msg).waitForCompletion();
 		} catch (MqttPersistenceException e) {
 			e.printStackTrace();
 			return false;
@@ -315,7 +327,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/evt/"+event+"/fmt/json";
 			subscriptions.put(newTopic, new Integer(qos));
-			mqttClient.subscribe(newTopic, qos);
+			mqttAsyncClient.subscribe(newTopic, qos);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -338,7 +350,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/evt/"+event+"/fmt/" + format;
 			subscriptions.put(newTopic, new Integer(0));
-			mqttClient.subscribe(newTopic, 0);
+			mqttAsyncClient.subscribe(newTopic, 0);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -363,7 +375,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/evt/"+event+"/fmt/" + format;
 			subscriptions.put(newTopic, new Integer(qos));
-			mqttClient.subscribe(newTopic, qos);
+			mqttAsyncClient.subscribe(newTopic, qos);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -387,7 +399,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/evt/"+event+"/fmt/" + format;
 			subscriptions.remove(newTopic);
-			mqttClient.unsubscribe(newTopic);
+			mqttAsyncClient.unsubscribe(newTopic);
 
 		} catch (MqttException e) {
 			e.printStackTrace();
@@ -459,7 +471,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/cmd/" + command + "/fmt/json";
 			subscriptions.put(newTopic, new Integer(qos));
-			mqttClient.subscribe(newTopic, qos);
+			mqttAsyncClient.subscribe(newTopic, qos);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -482,7 +494,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/cmd/" + command + "/fmt/" + format;
 			subscriptions.put(newTopic, new Integer(0));
-			mqttClient.subscribe(newTopic, 0);
+			mqttAsyncClient.subscribe(newTopic, 0);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -506,7 +518,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/cmd/"+ command +"/fmt/" + format;
 			subscriptions.put(newTopic, new Integer(qos));			
-			mqttClient.subscribe(newTopic, qos);
+			mqttAsyncClient.subscribe(newTopic, qos);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -542,7 +554,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 		try {
 			String newTopic = "iot-2/type/"+deviceType+"/id/"+deviceId+"/mon";
 			subscriptions.put(newTopic, new Integer(0));			
-			mqttClient.subscribe(newTopic, 0);
+			mqttAsyncClient.subscribe(newTopic, 0);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -554,16 +566,17 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 	 * reconnect to the IBM Internet of Things Foundation.
 	 */
 	public void connectionLost(Throwable e) {
-		LOG.info("Connection lost: " + e.getMessage());
+		final String METHOD = "connectionLost";
+		LoggerUtility.info(CLASS_NAME, METHOD, "Connection lost: " + e.getMessage());
 		connect();
 	    Iterator<Entry<String, Integer>> iterator = subscriptions.entrySet().iterator();
-	    LOG.info("Resubscribing....");
+	    LoggerUtility.info(CLASS_NAME, METHOD, "Resubscribing....");
 	    while (iterator.hasNext()) {
 	        //Map.Entry pairs = (Map.Entry)iterator.next();
 	        Entry<String, Integer> pairs = iterator.next();
-	        LOG.info(pairs.getKey() + " = " + pairs.getValue());
+	        LoggerUtility.info(CLASS_NAME, METHOD, pairs.getKey() + " = " + pairs.getValue());
 	        try {
-				mqttClient.subscribe(pairs.getKey().toString(), Integer.parseInt(pairs.getValue().toString()));
+	        	mqttAsyncClient.subscribe(pairs.getKey().toString(), Integer.parseInt(pairs.getValue().toString()));
 			} catch (NumberFormatException | MqttException e1) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
@@ -579,7 +592,8 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 	 * from the perspective of the device.
 	 */
 	public void deliveryComplete(IMqttDeliveryToken token) {
-		LOG.fine("Delivery Complete!");
+		final String METHOD = "deliveryComplete";
+		LoggerUtility.fine(CLASS_NAME, METHOD, "token = "+token.getMessageId());
 		messageCount++;
 	}
 	
@@ -587,6 +601,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 	 * The Application client does not currently support subscriptions.
 	 */
 	public void messageArrived(String topic, MqttMessage msg) throws Exception {
+		final String METHOD = "messageArrived";
 		if (eventCallback != null) {
 			/* Only check whether the message is a device event if a callback 
 			 * has been defined for events, otherwise it is a waste of time
@@ -602,10 +617,10 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 				Event evt = new Event(type, id, event, format, msg);
 
 				if(evt.getTimestamp() != null) {
-					LOG.fine("Event received: " + evt.toString());
+					LoggerUtility.fine(CLASS_NAME, METHOD, "Event received: " + evt.toString());
 					eventCallback.processEvent(evt);					
 				} else {
-					LOG.warning("Event is not formatted properly, so not processing");						
+					LoggerUtility.warn(CLASS_NAME, METHOD, "Event is not formatted properly, so not processing");						
 				}
 
 				return;
@@ -620,10 +635,10 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 				Command cmd = new Command(type, id, command, format, msg);
 			
 				if(cmd.getTimestamp() != null ) {
-					LOG.fine("Command received: " + cmd.toString());	
+					LoggerUtility.fine(CLASS_NAME, METHOD, "Command received: " + cmd.toString());	
 					eventCallback.processCommand(cmd);					
 				} else {
-					LOG.warning("Command is not formatted properly, so not processing");					
+					LoggerUtility.warn(CLASS_NAME, METHOD, "Command is not formatted properly, so not processing");					
 				}
 
 				return;
@@ -642,7 +657,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 				String type = matcher.group(1);
 				String id = matcher.group(2);
 				DeviceStatus status = new DeviceStatus(type, id, msg);
-				LOG.fine("Device status received: " + status.toString());
+				LoggerUtility.fine(CLASS_NAME, METHOD, "Device status received: " + status.toString());
 				statusCallback.processDeviceStatus(status);
 		    }
 			
@@ -650,7 +665,7 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 			if (matcher.matches()) {
 				String id = matcher.group(1);
 				ApplicationStatus status = new ApplicationStatus(id, msg);
-				LOG.fine("Application status received: " + status.toString());
+				LoggerUtility.fine(CLASS_NAME, METHOD, "Application status received: " + status.toString());
 				statusCallback.processApplicationStatus(status);
 		    }
 		}
@@ -664,4 +679,23 @@ public class ApplicationClient extends AbstractClient implements MqttCallback{
 	public void setStatusCallback(StatusCallback callback) {
 		this.statusCallback  = callback;
 	}
+	
+	/**
+	 * Publish an event to the IBM Internet of Things Foundation using HTTP(S) <br>
+	 * 
+ 	 * @param deviceType	Device Type
+	 * @param deviceId		Device ID
+	 * @param eventName  Name of the dataset under which to publish the data
+	 * @param payload Object to be added to the payload as the dataset
+	 * @return httpcode the return code
+	 * @throws Exception if the operation is not successful
+	 */
+	public int publishEventOverHTTP(String deviceType,
+									String deviceId,
+									String eventName, 
+									Object payload) throws Exception {
+		return publishEventsThroughHttps(this.getOrgId(), deviceType, deviceId, 
+				eventName, false, this.getAuthKey(), this.getAuthToken(), payload);
+	}
+
 }

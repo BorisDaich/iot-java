@@ -1,14 +1,25 @@
 package com.ibm.iotf.client.device;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.Properties;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.net.util.Base64;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
@@ -16,6 +27,7 @@ import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.ibm.iotf.client.AbstractClient;
+import com.ibm.iotf.util.LoggerUtility;
 
 
 /**
@@ -23,15 +35,29 @@ import com.ibm.iotf.client.AbstractClient;
  * 
  * This is a derived class from AbstractClient and can be used by embedded devices to handle connections with IBM Internet of Things Foundation.
  */
-public class DeviceClient extends AbstractClient implements MqttCallback{
+public class DeviceClient extends AbstractClient {
 	
 	private static final String CLASS_NAME = DeviceClient.class.getName();
-	private static final Logger LOG = Logger.getLogger(CLASS_NAME);
 	
 	private static final Pattern COMMAND_PATTERN = Pattern.compile("iot-2/cmd/(.+)/fmt/(.+)");
 	
 	private CommandCallback commandCallback = null;
 	
+	/**
+	 * This constructor allows external user to pass the existing MqttAsyncClient 
+	 * @param mqttAsyncClient
+	 */
+	protected DeviceClient(MqttAsyncClient mqttAsyncClient) {
+		super(mqttAsyncClient);
+	}
+
+	/**
+	 * This constructor allows external user to pass the existing MqttClient 
+	 * @param mqttClient
+	 */
+	protected DeviceClient(MqttClient mqttClient) {
+		super(mqttClient);
+	}
 	/**
 	 * Create a device client for the IBM Internet of Things Foundation. <br>
 	 * 
@@ -55,29 +81,34 @@ public class DeviceClient extends AbstractClient implements MqttCallback{
 			this.clientUsername = "use-token-auth";
 			this.clientPassword = getAuthToken();
 		}
-		createClient(this);
+		createClient(this.new MqttDeviceCallBack());
 	}
 	
-	public String getOrgId() {
-		return options.getProperty("org");
-	}
-
+	/*
+	 * old style - id
+	 * new style - Device-ID
+	 */
 	public String getDeviceId() {
-		return options.getProperty("id");
+		String id = null;
+		id = options.getProperty("id");
+		if(id == null) {
+			id = options.getProperty("Device-ID");
+		}
+		return trimedValue(id);
 	}
 
+	/*
+	 * old style - type
+	 * new style - Device-Type
+	 */
 	public String getDeviceType() {
-		return options.getProperty("type");
+		String type = null;
+		type = options.getProperty("type");
+		if(type == null) {
+			type = options.getProperty("Device-Type");
+		}
+		return trimedValue(type);
 	}
-
-	public String getAuthMethod() {
-		return options.getProperty("auth-method");
-	}
-
-	public String getAuthToken() {
-		return options.getProperty("auth-token");
-	}
-
 
 	public String getFormat() {
 		String format = options.getProperty("format");
@@ -100,9 +131,19 @@ public class DeviceClient extends AbstractClient implements MqttCallback{
 		}
 	}
 	
+	/*
+	 * This method reconnects when the connection is lost due to n/w interruption
+	 */
+	protected void reconnect() {
+		super.connect();
+		if (!getOrgId().equals("quickstart")) {
+			subscribeToCommands();
+		}
+	}
+	
 	private void subscribeToCommands() {
 		try {
-			mqttClient.subscribe("iot-2/cmd/+/fmt/" + getFormat(), 2);
+			mqttAsyncClient.subscribe("iot-2/cmd/+/fmt/" + getFormat(), 2);
 		} catch (MqttException e) {
 			e.printStackTrace();
 		}
@@ -141,6 +182,7 @@ public class DeviceClient extends AbstractClient implements MqttCallback{
 		if (!isConnected()) {
 			return false;
 		}
+		final String METHOD = "publishEvent(2)";
 		JsonObject payload = new JsonObject();
 		
 		String timestamp = ISO8601_DATE_FORMAT.format(new Date());
@@ -151,15 +193,15 @@ public class DeviceClient extends AbstractClient implements MqttCallback{
 		
 		String topic = "iot-2/evt/" + event + "/fmt/json";
 		
-		LOG.fine("Topic   = " + topic);
-		LOG.fine("Payload = " + payload.toString());
+		LoggerUtility.fine(CLASS_NAME, METHOD, "Topic   = " + topic);
+		LoggerUtility.fine(CLASS_NAME, METHOD, "Payload = " + payload.toString());
 		
 		MqttMessage msg = new MqttMessage(payload.toString().getBytes(Charset.forName("UTF-8")));
 		msg.setQos(qos);
 		msg.setRetained(false);
 		
 		try {
-			mqttClient.publish(topic, msg);
+			mqttAsyncClient.publish(topic, msg).waitForCompletion();
 		} catch (MqttPersistenceException e) {
 			e.printStackTrace();
 			return false;
@@ -171,56 +213,79 @@ public class DeviceClient extends AbstractClient implements MqttCallback{
 	}
 	
 	
-	/**
-	 * If we lose connection trigger the connect logic to attempt to
-	 * reconnect to the IBM Internet of Things Foundation.
-	 * 
-	 * @param exception
-	 *            Throwable which caused the connection to get lost
-	 */
-	public void connectionLost(Throwable exception) {
-		LOG.info("Connection lost: " + exception.getMessage());
-		connect();
-	}
+
 	
-	/**
-	 * A completed deliver does not guarantee that the message is received by the service
-	 * because devices send messages with Quality of Service (QoS) 0. <br>
-	 * 
-	 * The message count
-	 * represents the number of messages that were sent by the device without an error on
-	 * from the perspective of the device.
-	 * @param token
-	 *            MQTT delivery token
-	 */
-	public void deliveryComplete(IMqttDeliveryToken token) {
-		LOG.fine("Delivery Complete!");
-		messageCount++;
-	}
+	private class MqttDeviceCallBack implements MqttCallback {
 	
-	/**
-	 * The Device client does not currently support subscriptions.
-	 */
-	public void messageArrived(String topic, MqttMessage msg) throws Exception {
-		if (commandCallback != null) {
-			/* Only check whether the message is a command if a callback 
-			 * has been defined, otherwise it is a waste of time
-			 * as without a callback there is nothing to process the generated
-			 * command.
-			 */
-			Matcher matcher = COMMAND_PATTERN.matcher(topic);
-			if (matcher.matches()) {
-				String command = matcher.group(1);
-				String format = matcher.group(2);
-				Command cmd = new Command(command, format, msg);
-				LOG.fine("Event received: " + cmd.toString());
-				commandCallback.processCommand(cmd);
-		    }
+		/**
+		 * If we lose connection trigger the connect logic to attempt to
+		 * reconnect to the IBM Internet of Things Foundation.
+		 * 
+		 * @param exception
+		 *            Throwable which caused the connection to get lost
+		 */
+		public void connectionLost(Throwable exception) {
+			final String METHOD = "connectionLost";
+			LoggerUtility.info(CLASS_NAME, METHOD, exception.getMessage());
+			reconnect();
 		}
+		
+		/**
+		 * A completed deliver does not guarantee that the message is received by the service
+		 * because devices send messages with Quality of Service (QoS) 0. <br>
+		 * 
+		 * The message count
+		 * represents the number of messages that were sent by the device without an error on
+		 * from the perspective of the device.
+		 * @param token
+		 *            MQTT delivery token
+		 */
+		public void deliveryComplete(IMqttDeliveryToken token) {
+			final String METHOD = "deliveryComplete";
+			LoggerUtility.fine(CLASS_NAME, METHOD, "token " + token.getMessageId());
+			messageCount++;
+		}
+		
+		/**
+		 * The Device client does not currently support subscriptions.
+		 */
+		public void messageArrived(String topic, MqttMessage msg) throws Exception {
+			final String METHOD = "messageArrived";
+			if (commandCallback != null) {
+				/* Only check whether the message is a command if a callback 
+				 * has been defined, otherwise it is a waste of time
+				 * as without a callback there is nothing to process the generated
+				 * command.
+				 */
+				Matcher matcher = COMMAND_PATTERN.matcher(topic);
+				if (matcher.matches()) {
+					String command = matcher.group(1);
+					String format = matcher.group(2);
+					Command cmd = new Command(command, format, msg);
+					LoggerUtility.fine(CLASS_NAME, METHOD, "Event received: " + cmd.toString());
+					commandCallback.processCommand(cmd);
+			    }
+			}
+		}
+
 	}
 	
 	public void setCommandCallback(CommandCallback callback) {
 		this.commandCallback  = callback;
+	}
+	
+	/**
+	 * Publish an event to the IBM Internet of Things Foundation using HTTP(S)<br>
+	 * 
+	 * @param eventName  Name of the dataset under which to publish the data
+	 * @param payload Object to be added to the payload as the dataset
+	 * @return httpcode the return code
+	 * @throws Exception if the operation is not successful
+	 */
+	public int publishEventOverHTTP(String eventName, Object payload) throws Exception {
+		String authKey = "use-token-auth";
+		return publishEventsThroughHttps(this.getOrgId(), this.getDeviceType(), this.getDeviceId(), 
+				eventName, true, authKey, this.getAuthToken(), payload);
 	}
 	
 }
