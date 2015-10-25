@@ -7,8 +7,6 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -16,8 +14,6 @@ import java.util.logging.Logger;
 
 import javax.net.ssl.SSLContext;
 
-import org.apache.http.client.config.AuthSchemes;
-import org.apache.http.client.config.RequestConfig;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -37,16 +33,7 @@ public abstract class AbstractClient {
 	
 	protected static final String CLIENT_ID_DELIMITER = ":";
 	
-    protected static final List<String>  baseIoTFAuthPrefs     = Arrays.asList(AuthSchemes.BASIC);
-    protected static final String        baseIoTFHost          = "internetofthings.ibmcloud.com";
-    
-    protected static final String        baseIoTFPath          = "/api/v0001/organizations/";
-    protected static final String        baseIoTFHttpScheme    = "https";
-    protected static final int           baseIoTFPort          = 443;
-    protected static final RequestConfig baseIoTFRequestConfig = RequestConfig.custom().setAuthenticationEnabled(true).setTargetPreferredAuthSchemes(baseIoTFAuthPrefs).build();
-
-	
-	protected static final String DOMAIN =  "messaging" + baseIoTFHost;
+	protected static final String DOMAIN = "messaging.internetofthings.ibmcloud.com";
 	protected static final int MQTT_PORT = 1883;
 	protected static final int MQTTS_PORT = 8883;
 	
